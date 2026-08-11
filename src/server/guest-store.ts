@@ -28,6 +28,15 @@ type ImportGuest = {
   aliases: string[];
 };
 
+export type GuestInput = ImportGuest;
+
+export class GuestAlreadyExistsError extends Error {
+  constructor(fullName: string) {
+    super(`Bu adla bir davetli zaten var: ${fullName}`);
+    this.name = "GuestAlreadyExistsError";
+  }
+}
+
 export type ImportResult = {
   receivedRows: number;
   uniqueGuests: number;
@@ -133,6 +142,42 @@ export class GuestStore {
     `).run(contextValue, updatedAt, fullName, tableNumber);
     if (result.changes === 0) return null;
     return this.get(fullName, tableNumber);
+  }
+
+  create(input: GuestInput): Guest {
+    try {
+      this.database.prepare(`
+        INSERT INTO guests (full_name, table_number, aliases)
+        VALUES (?, ?, ?)
+      `).run(input.fullName, input.tableNumber, JSON.stringify(input.aliases));
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
+        throw new GuestAlreadyExistsError(input.fullName);
+      }
+      throw error;
+    }
+    return this.get(input.fullName, input.tableNumber)!;
+  }
+
+  update(originalFullName: string, input: GuestInput): Guest | null {
+    try {
+      const result = this.database.prepare(`
+        UPDATE guests
+        SET full_name = ?, table_number = ?, aliases = ?
+        WHERE full_name = ?
+      `).run(input.fullName, input.tableNumber, JSON.stringify(input.aliases), originalFullName);
+      if (result.changes === 0) return null;
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
+        throw new GuestAlreadyExistsError(input.fullName);
+      }
+      throw error;
+    }
+    return this.get(input.fullName, input.tableNumber)!;
+  }
+
+  delete(fullName: string): boolean {
+    return this.database.prepare("DELETE FROM guests WHERE full_name = ?").run(fullName).changes > 0;
   }
 
   deleteAll(): number {

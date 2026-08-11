@@ -73,3 +73,37 @@ test("deletes every guest and their contexts", () => {
     assert.equal(store.deleteAll(), 0);
   });
 });
+
+test("creates, updates, and deletes an individual guest", () => {
+  withStore((store) => {
+    const created = store.create({ fullName: "Ayşe Yılmaz", tableNumber: "3", aliases: ["Ayşecik"] });
+    assert.equal(created.fullName, "Ayşe Yılmaz");
+    store.setContext("Ayşe Yılmaz", "3", "Gelinin arkadaşı");
+
+    const updated = store.update("Ayşe Yılmaz", { fullName: "Ayşe Kaya", tableNumber: "8", aliases: ["Ayşe"] });
+    assert.equal(updated?.fullName, "Ayşe Kaya");
+    assert.equal(updated?.tableNumber, "8");
+    assert.equal(updated?.context, "Gelinin arkadaşı");
+    assert.equal(store.get("Ayşe Yılmaz", "3"), null);
+
+    assert.equal(store.delete("Ayşe Kaya"), true);
+    assert.equal(store.delete("Ayşe Kaya"), false);
+    assert.deepEqual(store.list(), []);
+  });
+});
+
+test("rejects duplicate names during individual create and rename", () => {
+  withStore((store) => {
+    store.create({ fullName: "Ayşe Yılmaz", tableNumber: "3", aliases: [] });
+    store.create({ fullName: "Mehmet Kaya", tableNumber: "4", aliases: [] });
+    assert.throws(
+      () => store.create({ fullName: "Ayşe Yılmaz", tableNumber: "9", aliases: [] }),
+      (error) => error instanceof Error && error.name === "GuestAlreadyExistsError"
+    );
+    assert.throws(
+      () => store.update("Mehmet Kaya", { fullName: "Ayşe Yılmaz", tableNumber: "4", aliases: [] }),
+      (error) => error instanceof Error && error.name === "GuestAlreadyExistsError"
+    );
+    assert.ok(store.get("Mehmet Kaya", "4"));
+  });
+});

@@ -57,6 +57,7 @@ Ahmet Yılmaz,12,"Ahmet;Ahmet Bey"
 - Yüklemeler mevcut kayıtları günceller; CSV'de bulunmayan davetlileri silmez ve kaydedilmiş bağlamları korur.
 - Aynı dosyadaki birebir tekrarlar tek kayıt sayılır. Aynı ad için çelişen masa veya alias bilgisi varsa dosyanın tamamı reddedilir.
 - **Sıfırla** düğmesi, onaydan sonra tüm davetlileri ve kayıtlı bağlamlarını siler.
+- **+ Davetli** ile tek kayıt eklenebilir; listedeki **Düzenle** eylemi ad, masa ve alias bilgilerini günceller veya davetliyi silebilir.
 
 ## Düğün günü önerileri
 

@@ -15,7 +15,16 @@ type LogEntry = { time: string; message: string };
 type GuestTableMapping = {
   fullName: string;
   tableNumber: string;
+  aliases: string[];
   context: string;
+};
+
+type GuestEditor = {
+  mode: "create" | "edit";
+  originalFullName?: string;
+  fullName: string;
+  tableNumber: string;
+  aliases: string;
 };
 
 type GuestImportResult = {
@@ -63,6 +72,9 @@ export function App() {
   const [guestTablesLoading, setGuestTablesLoading] = useState(true);
   const [guestImporting, setGuestImporting] = useState(false);
   const [guestResetting, setGuestResetting] = useState(false);
+  const [guestEditor, setGuestEditor] = useState<GuestEditor | null>(null);
+  const [guestSaving, setGuestSaving] = useState(false);
+  const [guestEditorError, setGuestEditorError] = useState("");
   const [guestImportMessage, setGuestImportMessage] = useState("");
   const [guestImportError, setGuestImportError] = useState("");
   const [guestSearch, setGuestSearch] = useState("");
@@ -151,6 +163,79 @@ export function App() {
       setGuestImportError(error instanceof Error ? error.message : "Davetli listesi sıfırlanamadı.");
     } finally {
       setGuestResetting(false);
+    }
+  };
+
+  const openCreateGuest = () => {
+    setGuestEditor({ mode: "create", fullName: "", tableNumber: "", aliases: "" });
+    setGuestEditorError("");
+  };
+
+  const openEditGuest = (guest: GuestTableMapping) => {
+    setGuestEditor({
+      mode: "edit",
+      originalFullName: guest.fullName,
+      fullName: guest.fullName,
+      tableNumber: guest.tableNumber,
+      aliases: guest.aliases.join("; ")
+    });
+    setGuestEditorError("");
+  };
+
+  const saveGuest = async () => {
+    if (!guestEditor) return;
+    const fullName = guestEditor.fullName.trim();
+    const tableNumber = guestEditor.tableNumber.trim();
+    if (!fullName || !tableNumber) {
+      setGuestEditorError("Ad soyad ve masa numarası zorunludur.");
+      return;
+    }
+    setGuestSaving(true);
+    setGuestEditorError("");
+    try {
+      const isCreate = guestEditor.mode === "create";
+      const response = await fetch(
+        isCreate ? "/api/guests" : `/api/guests/${encodeURIComponent(guestEditor.originalFullName!)}`,
+        {
+          method: isCreate ? "POST" : "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fullName,
+            tableNumber,
+            aliases: guestEditor.aliases.split(";").map((alias) => alias.trim()).filter(Boolean)
+          })
+        }
+      );
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error ?? "Davetli kaydedilemedi.");
+      await loadGuests();
+      setGuestEditor(null);
+      log(`${fullName} ${isCreate ? "eklendi" : "güncellendi"}.`);
+    } catch (error) {
+      setGuestEditorError(error instanceof Error ? error.message : "Davetli kaydedilemedi.");
+    } finally {
+      setGuestSaving(false);
+    }
+  };
+
+  const deleteGuest = async () => {
+    if (!guestEditor?.originalFullName) return;
+    if (!window.confirm(`${guestEditor.originalFullName} ve kayıtlı notu kalıcı olarak silinsin mi?`)) return;
+    setGuestSaving(true);
+    setGuestEditorError("");
+    try {
+      const response = await fetch(`/api/guests/${encodeURIComponent(guestEditor.originalFullName)}`, { method: "DELETE" });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(result.error ?? "Davetli silinemedi.");
+      const deletedName = guestEditor.originalFullName;
+      await loadGuests();
+      setGuestEditor(null);
+      setEditingGuestKey(null);
+      log(`${deletedName} silindi.`);
+    } catch (error) {
+      setGuestEditorError(error instanceof Error ? error.message : "Davetli silinemedi.");
+    } finally {
+      setGuestSaving(false);
     }
   };
 
@@ -474,6 +559,11 @@ export function App() {
             >
               {guestResetting ? "Sıfırlanıyor…" : "Sıfırla"}
             </button>
+            <button
+              className="secondary guest-add-button"
+              onClick={openCreateGuest}
+              disabled={guestImporting || guestResetting}
+            >+ Davetli</button>
           </div>
           <small>Mevcut davetliler güncellenir; listede olmayanlar silinmez.</small>
           {guestImportMessage && <p className="import-message">{guestImportMessage}</p>}
@@ -503,13 +593,16 @@ export function App() {
               <div className="guest-summary">
                 <div className="guest-name">
                   <span>{guest.fullName}</span>
-                  <button
-                    className={`context-toggle${guest.context ? " has-context" : ""}`}
-                    onClick={() => editGuestContext(guest)}
-                    title={guest.context || "Bağlam ekle"}
-                  >
-                    {guest.context ? "Notu düzenle" : "+ Not"}
-                  </button>
+                  <div className="guest-tools">
+                    <button
+                      className={`context-toggle${guest.context ? " has-context" : ""}`}
+                      onClick={() => editGuestContext(guest)}
+                      title={guest.context || "Bağlam ekle"}
+                    >
+                      {guest.context ? "Not" : "+ Not"}
+                    </button>
+                    <button className="context-toggle" onClick={() => openEditGuest(guest)}>Düzenle</button>
+                  </div>
                 </div>
                 <strong>Masa {guest.tableNumber}</strong>
               </div>
@@ -567,6 +660,44 @@ export function App() {
           ))}
         </div>
       </aside>
+
+      {guestEditor && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={() => !guestSaving && setGuestEditor(null)}>
+          <section className="guest-modal" role="dialog" aria-modal="true" aria-labelledby="guest-editor-title" onMouseDown={(event) => event.stopPropagation()}>
+            <h2 id="guest-editor-title">{guestEditor.mode === "create" ? "Davetli ekle" : "Davetliyi düzenle"}</h2>
+            <label>
+              <span>Ad soyad</span>
+              <input
+                value={guestEditor.fullName}
+                onChange={(event) => setGuestEditor({ ...guestEditor, fullName: event.target.value })}
+                autoFocus
+              />
+            </label>
+            <label>
+              <span>Masa numarası</span>
+              <input
+                value={guestEditor.tableNumber}
+                onChange={(event) => setGuestEditor({ ...guestEditor, tableNumber: event.target.value })}
+              />
+            </label>
+            <label>
+              <span>Aliaslar <small>(; ile ayırın)</small></span>
+              <input
+                value={guestEditor.aliases}
+                onChange={(event) => setGuestEditor({ ...guestEditor, aliases: event.target.value })}
+              />
+            </label>
+            {guestEditorError && <p className="context-error">{guestEditorError}</p>}
+            <div className="guest-modal-actions">
+              {guestEditor.mode === "edit" && (
+                <button className="danger" onClick={() => void deleteGuest()} disabled={guestSaving}>Sil</button>
+              )}
+              <button className="secondary" onClick={() => setGuestEditor(null)} disabled={guestSaving}>Vazgeç</button>
+              <button onClick={() => void saveGuest()} disabled={guestSaving}>{guestSaving ? "Kaydediliyor…" : "Kaydet"}</button>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }

@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { GuestImportError, GuestStore } from "./guest-store.js";
+import { GuestAlreadyExistsError, GuestImportError, GuestStore, type GuestInput } from "./guest-store.js";
 
 const port = Number(process.env.PORT ?? 3000);
 const apiKey = process.env.OPENAI_API_KEY;
@@ -21,6 +21,68 @@ app.get("/api/health", (_req, res) => {
 
 app.get("/api/guests", (_req, res) => {
   res.json(guestStore.list());
+});
+
+function parseGuestInput(body: unknown): GuestInput | null {
+  if (!body || typeof body !== "object") return null;
+  const input = body as Record<string, unknown>;
+  const fullName = typeof input.fullName === "string" ? input.fullName.trim() : "";
+  const tableNumber = typeof input.tableNumber === "string" ? input.tableNumber.trim() : "";
+  if (!fullName || !tableNumber || (input.aliases !== undefined && !Array.isArray(input.aliases))) return null;
+  const aliases = (input.aliases ?? []) as unknown[];
+  if (aliases.some((alias) => typeof alias !== "string")) return null;
+  return {
+    fullName,
+    tableNumber,
+    aliases: [...new Set(aliases.map((alias) => (alias as string).trim()).filter(Boolean))]
+  };
+}
+
+app.post("/api/guests", (req, res) => {
+  const input = parseGuestInput(req.body);
+  if (!input) {
+    res.status(400).json({ error: "fullName ve tableNumber zorunludur; aliases bir metin dizisi olmalıdır." });
+    return;
+  }
+  try {
+    res.status(201).json({ ok: true, guest: guestStore.create(input) });
+  } catch (error) {
+    if (error instanceof GuestAlreadyExistsError) {
+      res.status(409).json({ error: error.message });
+      return;
+    }
+    throw error;
+  }
+});
+
+app.put("/api/guests/:fullName", (req, res) => {
+  const input = parseGuestInput(req.body);
+  if (!input) {
+    res.status(400).json({ error: "fullName ve tableNumber zorunludur; aliases bir metin dizisi olmalıdır." });
+    return;
+  }
+  try {
+    const guest = guestStore.update(req.params.fullName, input);
+    if (!guest) {
+      res.status(404).json({ error: "Davetli bulunamadı." });
+      return;
+    }
+    res.json({ ok: true, guest });
+  } catch (error) {
+    if (error instanceof GuestAlreadyExistsError) {
+      res.status(409).json({ error: error.message });
+      return;
+    }
+    throw error;
+  }
+});
+
+app.delete("/api/guests/:fullName", (req, res) => {
+  if (!guestStore.delete(req.params.fullName)) {
+    res.status(404).json({ error: "Davetli bulunamadı." });
+    return;
+  }
+  res.json({ ok: true });
 });
 
 app.post("/api/guests/import", (req, res) => {
