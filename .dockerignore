@@ -1,11 +1,10 @@
 node_modules
 dist
-.env
-.DS_Store
-*.log
+.git
+.idea
 data/*.sqlite
 data/*.sqlite-shm
 data/*.sqlite-wal
-.idea
+*.log
 *.tar
 *.bat

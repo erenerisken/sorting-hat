@@ -42,6 +42,19 @@ npm start
 
 Ardından `http://localhost:3000` adresini açın.
 
+## Docker ile yerel çalıştırma
+
+Bu proje yerel kullanım için `.env` dosyasını image içine kopyalar. Image'ı paylaşmayın; içindeki OpenAI API anahtarı image erişimi olan kişiler tarafından okunabilir.
+
+```bash
+docker compose build
+docker compose up -d
+```
+
+Ardından `http://localhost:3000` adresini açın. SQLite verileri `guest-data` adlı Docker volume'ünde saklanır. Uygulama logları `docker compose logs -f` ile izlenebilir.
+
+Windows'a image tar dosyasıyla taşırken `sorting-hat-local-amd64.tar`, `compose.yaml` ve `start-windows.bat` dosyalarını aynı klasöre koyup batch dosyasını çalıştırın.
+
 ## Davetli listesi
 
 Uygulama davetlileri `.env` içindeki `GUESTS_DB_PATH` ile seçilen SQLite veritabanında tutar. Veritabanı ilk açılışta boştur. Sol taraftaki **CSV yükle** düğmesiyle aşağıdaki biçimde bir dosya yükleyin:

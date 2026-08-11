@@ -1,0 +1,14 @@
+services:
+  sorting-hat:
+    image: sorting-hat:local
+    platform: linux/amd64
+    build:
+      context: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - guest-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  guest-data:
