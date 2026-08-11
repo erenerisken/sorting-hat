@@ -2,46 +2,49 @@ import "dotenv/config";
 import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { GuestService } from "./guest-service.js";
-import { GuestContextStore } from "./guest-context-store.js";
+import { GuestImportError, GuestStore } from "./guest-store.js";
 
 const port = Number(process.env.PORT ?? 3000);
 const apiKey = process.env.OPENAI_API_KEY;
 const model = process.env.OPENAI_REALTIME_MODEL ?? "gpt-realtime-2.1-mini";
 const voice = process.env.OPENAI_REALTIME_VOICE ?? "cedar";
-const guestsPath = process.env.GUESTS_CSV_PATH ?? "./data/guests.csv";
-const contextDatabasePath = process.env.CONTEXT_DB_PATH ?? "./data/guest-contexts.sqlite";
-
-const guestService = new GuestService(guestsPath);
-await guestService.load();
-const guestContextStore = new GuestContextStore(contextDatabasePath);
+const guestsDatabasePath = process.env.GUESTS_DB_PATH ?? "./data/guests.sqlite";
+const guestStore = new GuestStore(guestsDatabasePath);
 
 const app = express();
 app.use(express.json());
-app.use(express.text({ type: ["application/sdp", "text/plain"], limit: "2mb" }));
+app.use(express.text({ type: ["application/sdp", "text/plain", "text/csv"], limit: "2mb" }));
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, guests: guestService.list().length, model, voice });
+  res.json({ ok: true, guests: guestStore.list().length, model, voice });
 });
 
 app.get("/api/guests", (_req, res) => {
-  const contexts = new Map(
-    guestContextStore.list().map((item) => [`${item.fullName}\u0000${item.tableNumber}`, item.context])
-  );
-  res.json(guestService.list().map((guest) => ({
-    ...guest,
-    context: contexts.get(`${guest.fullName}\u0000${guest.tableNumber}`) ?? ""
-  })));
+  res.json(guestStore.list());
+});
+
+app.post("/api/guests/import", (req, res) => {
+  if (typeof req.body !== "string") {
+    res.status(400).json({ error: "CSV içeriği text/csv olarak gönderilmelidir." });
+    return;
+  }
+  try {
+    res.json({ ok: true, ...guestStore.importCsv(req.body) });
+  } catch (error) {
+    if (error instanceof GuestImportError) {
+      res.status(400).json({ error: error.message, ...(error.row ? { row: error.row } : {}) });
+      return;
+    }
+    console.error(error);
+    res.status(500).json({ error: "Davetli listesi içe aktarılamadı." });
+  }
 });
 
 app.put("/api/guest-context", (req, res) => {
   const fullName = typeof req.body?.fullName === "string" ? req.body.fullName.trim() : "";
   const tableNumber = typeof req.body?.tableNumber === "string" ? req.body.tableNumber.trim() : "";
   const context = typeof req.body?.context === "string" ? req.body.context.trim() : "";
-  const guestExists = guestService.list().some(
-    (guest) => guest.fullName === fullName && guest.tableNumber === tableNumber
-  );
-  if (!guestExists) {
+  if (!guestStore.get(fullName, tableNumber)) {
     res.status(404).json({ error: "Davetli bulunamadı." });
     return;
   }
@@ -49,24 +52,24 @@ app.put("/api/guest-context", (req, res) => {
     res.status(400).json({ error: "Bağlam en fazla 500 karakter olabilir." });
     return;
   }
-  res.json({ ok: true, guestContext: guestContextStore.set(fullName, tableNumber, context) });
+  res.json({ ok: true, guestContext: guestStore.setContext(fullName, tableNumber, context) });
 });
 
 app.post("/api/guest-context/lookup", (req, res) => {
   const fullName = typeof req.body?.fullName === "string" ? req.body.fullName.trim() : "";
   const tableNumber = typeof req.body?.tableNumber === "string" ? req.body.tableNumber.trim() : "";
-  const guestContext = guestContextStore.get(fullName, tableNumber);
+  const guest = guestStore.get(fullName, tableNumber);
   res.json({
     fullName,
     tableNumber,
-    found: Boolean(guestContext),
-    context: guestContext?.context ?? ""
+    found: Boolean(guest?.context),
+    context: guest?.context ?? ""
   });
 });
 
 app.post("/api/find-guest", (req, res) => {
   const spokenName = typeof req.body?.spokenName === "string" ? req.body.spokenName : "";
-  res.json(guestService.find(spokenName));
+  res.json(guestStore.find(spokenName));
 });
 
 app.post("/api/realtime/session", async (req, res) => {
@@ -204,5 +207,5 @@ app.get("*", (_req, res) => {
 
 app.listen(port, () => {
   console.log(`Sorting Hat çalışıyor: http://localhost:${port}`);
-  console.log(`${guestService.list().length} davetli yüklendi.`);
+  console.log(`${guestStore.list().length} davetli yüklendi.`);
 });

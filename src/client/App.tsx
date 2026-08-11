@@ -18,6 +18,13 @@ type GuestTableMapping = {
   context: string;
 };
 
+type GuestImportResult = {
+  uniqueGuests: number;
+  inserted: number;
+  updated: number;
+  unchanged: number;
+};
+
 type RealtimeOutputItem = {
   type?: string;
   name?: string;
@@ -53,6 +60,10 @@ export function App() {
   const [lastTranscript, setLastTranscript] = useState("");
   const [guestTables, setGuestTables] = useState<GuestTableMapping[]>([]);
   const [guestTablesError, setGuestTablesError] = useState(false);
+  const [guestTablesLoading, setGuestTablesLoading] = useState(true);
+  const [guestImporting, setGuestImporting] = useState(false);
+  const [guestImportMessage, setGuestImportMessage] = useState("");
+  const [guestImportError, setGuestImportError] = useState("");
   const [guestSearch, setGuestSearch] = useState("");
   const [editingGuestKey, setEditingGuestKey] = useState<string | null>(null);
   const [contextDraft, setContextDraft] = useState("");
@@ -78,6 +89,47 @@ export function App() {
       ...current
     ].slice(0, 12));
   }, []);
+
+  const loadGuests = useCallback(async (signal?: AbortSignal) => {
+    setGuestTablesLoading(true);
+    try {
+      const response = await fetch("/api/guests", { signal });
+      if (!response.ok) throw new Error("Davetli listesi alınamadı.");
+      setGuestTables(await response.json() as GuestTableMapping[]);
+      setGuestTablesError(false);
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setGuestTablesError(true);
+    } finally {
+      if (!signal?.aborted) setGuestTablesLoading(false);
+    }
+  }, []);
+
+  const uploadGuestCsv = async (file: File) => {
+    setGuestImporting(true);
+    setGuestImportMessage("");
+    setGuestImportError("");
+    try {
+      const response = await fetch("/api/guests/import", {
+        method: "POST",
+        headers: { "Content-Type": "text/csv" },
+        body: await file.text()
+      });
+      const result = await response.json() as GuestImportResult & { error?: string; row?: number };
+      if (!response.ok) {
+        throw new Error(`${result.error ?? "CSV yüklenemedi."}${result.row ? ` (satır ${result.row})` : ""}`);
+      }
+      await loadGuests();
+      setGuestImportMessage(
+        `${result.uniqueGuests} davetli işlendi: ${result.inserted} yeni, ${result.updated} güncellendi, ${result.unchanged} değişmedi.`
+      );
+      log(`${file.name} içe aktarıldı; ${result.uniqueGuests} davetli işlendi.`);
+    } catch (error) {
+      setGuestImportError(error instanceof Error ? error.message : "CSV yüklenemedi.");
+    } finally {
+      setGuestImporting(false);
+    }
+  };
 
   const setMicrophoneEnabled = (enabled: boolean) => {
     streamRef.current?.getAudioTracks().forEach((track) => {
@@ -354,23 +406,9 @@ export function App() {
 
   useEffect(() => {
     const controller = new AbortController();
-
-    void fetch("/api/guests", { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) throw new Error("Davetli listesi alınamadı.");
-        return response.json() as Promise<GuestTableMapping[]>;
-      })
-      .then((guests) => {
-        setGuestTables(guests);
-        setGuestTablesError(false);
-      })
-      .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === "AbortError") return;
-        setGuestTablesError(true);
-      });
-
+    void loadGuests(controller.signal);
     return () => controller.abort();
-  }, []);
+  }, [loadGuests]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -391,6 +429,24 @@ export function App() {
     <main className="shell">
       <aside className="panel guest-panel">
         <h2>Davetli listesi</h2>
+        <div className="guest-import">
+          <label className={`guest-import-button${guestImporting ? " disabled" : ""}`}>
+            <input
+              type="file"
+              accept=".csv,text/csv"
+              disabled={guestImporting}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void uploadGuestCsv(file);
+                event.target.value = "";
+              }}
+            />
+            {guestImporting ? "CSV yükleniyor…" : "CSV yükle"}
+          </label>
+          <small>Mevcut davetliler güncellenir; listede olmayanlar silinmez.</small>
+          {guestImportMessage && <p className="import-message">{guestImportMessage}</p>}
+          {guestImportError && <p className="context-error">{guestImportError}</p>}
+        </div>
         <label className="guest-search">
           <span className="sr-only">Davetli veya masa ara</span>
           <input
@@ -402,10 +458,12 @@ export function App() {
         </label>
         <h3>Davetli — Masa</h3>
         <div className="guest-tables">
-          {guestTablesError ? (
+          {guestTablesLoading ? (
+            <p className="muted">Davetli listesi yükleniyor…</p>
+          ) : guestTablesError ? (
             <p className="muted">Davetli listesi alınamadı.</p>
           ) : guestTables.length === 0 ? (
-            <p className="muted">Davetli listesi yükleniyor…</p>
+            <p className="muted">Henüz davetli yok. Bir CSV yükleyin.</p>
           ) : visibleGuestTables.length === 0 ? (
             <p className="muted">Eşleşen davetli bulunamadı.</p>
           ) : visibleGuestTables.map((guest, index) => (

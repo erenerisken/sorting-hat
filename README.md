@@ -1,6 +1,6 @@
 # Büyülü Masa Şapkası — OpenAI Realtime MVP
 
-Düğünde misafirin adını dinleyen, lokal CSV listesinden masasını bulan ve büyülü bir şapka karakteriyle sesli olarak açıklayan tek-repo React + Node.js uygulaması.
+Düğünde misafirin adını dinleyen, lokal SQLite listesinden masasını bulan ve büyülü bir şapka karakteriyle sesli olarak açıklayan tek-repo React + Node.js uygulaması.
 
 ## Özellikler
 
@@ -8,7 +8,7 @@ Düğünde misafirin adını dinleyen, lokal CSV listesinden masasını bulan ve
 - Tarayıcı mikrofonu ve hoparlörüyle WebRTC ses akışı
 - OpenAI Realtime API ile konuşmadan konuşmaya yanıt
 - API anahtarının sadece Node.js sunucusunda tutulması
-- Lokal CSV davetli listesi
+- Lokal SQLite davetli listesi ve CSV ile içe aktarma
 - Türkçe karakterleri normalize eden fuzzy isim eşleştirme
 - Masa numarasının yalnızca `find_guest` tool sonucundan alınması
 - VAD ile konuşma başlangıcı/bitişi algılama
@@ -44,16 +44,18 @@ Ardından `http://localhost:3000` adresini açın.
 
 ## Davetli listesi
 
-`data/guests.csv`:
+Uygulama davetlileri `.env` içindeki `GUESTS_DB_PATH` ile seçilen SQLite veritabanında tutar. Veritabanı ilk açılışta boştur. Sol taraftaki **CSV yükle** düğmesiyle aşağıdaki biçimde bir dosya yükleyin:
 
 ```csv
-firstName,lastName,tableNumber,aliases
-Ahmet,Yılmaz,12,"Ahmet;Ahmet Bey"
+fullName,tableNumber,aliases
+Ahmet Yılmaz,12,"Ahmet;Ahmet Bey"
 ```
 
 - `aliases` isteğe bağlıdır.
 - Birden fazla alias `;` ile ayrılır.
-- Aynı isimden birden fazla varsa tam isim ve ayırt edici alias ekleyin.
+- `fullName` benzersiz davetli anahtarıdır.
+- Yüklemeler mevcut kayıtları günceller; CSV'de bulunmayan davetlileri silmez ve kaydedilmiş bağlamları korur.
+- Aynı dosyadaki birebir tekrarlar tek kayıt sayılır. Aynı ad için çelişen masa veya alias bilgisi varsa dosyanın tamamı reddedilir.
 
 ## Düğün günü önerileri
 
@@ -81,13 +83,9 @@ Node.js / Express
   ├─ React production build
   ├─ OpenAI Realtime session bootstrap
   ├─ API key protection
-  └─ local CSV fuzzy matching
+  └─ SQLite guest store + transactional CSV import + fuzzy matching
 ```
 
 ## Not
 
 OpenAI Realtime API ve model adları zamanla değişebilir. Modeli `.env` içindeki `OPENAI_REALTIME_MODEL` ile değiştirebilirsiniz.
-
-## Paket doğrulama notu
-
-Repo standart npm paketlerini kullanır. Oluşturulduğu çalışma ortamındaki özel npm aynası `@types/express` paketini sunmadığı için burada tam `npm install`/build testi tamamlanamadı. Normal npm registry kullanan yerel bilgisayarda yukarıdaki kurulum komutlarıyla çalıştırılmak üzere hazırlanmıştır.
