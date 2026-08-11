@@ -55,6 +55,14 @@ Ardından `http://localhost:3000` adresini açın. SQLite verileri `guest-data` 
 
 Windows'a image tar dosyasıyla taşırken `sorting-hat-local-amd64.tar`, `compose.yaml` ve `start-windows.bat` dosyalarını aynı klasöre koyup batch dosyasını çalıştırın.
 
+Image'ı sıfırdan yeniden oluşturup Windows arşivini güncellemek için:
+
+```bash
+make rebuild
+```
+
+`make run` container'ı yeniden oluşturup başlatır; `make stop` durdurur.
+
 ## Davetli listesi
 
 Uygulama davetlileri `.env` içindeki `GUESTS_DB_PATH` ile seçilen SQLite veritabanında tutar. Veritabanı ilk açılışta boştur. Sol taraftaki **CSV yükle** düğmesiyle aşağıdaki biçimde bir dosya yükleyin:
