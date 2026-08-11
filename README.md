@@ -56,6 +56,7 @@ Ahmet Yılmaz,12,"Ahmet;Ahmet Bey"
 - `fullName` benzersiz davetli anahtarıdır.
 - Yüklemeler mevcut kayıtları günceller; CSV'de bulunmayan davetlileri silmez ve kaydedilmiş bağlamları korur.
 - Aynı dosyadaki birebir tekrarlar tek kayıt sayılır. Aynı ad için çelişen masa veya alias bilgisi varsa dosyanın tamamı reddedilir.
+- **Sıfırla** düğmesi, onaydan sonra tüm davetlileri ve kayıtlı bağlamlarını siler.
 
 ## Düğün günü önerileri
 

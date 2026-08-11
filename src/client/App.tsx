@@ -62,6 +62,7 @@ export function App() {
   const [guestTablesError, setGuestTablesError] = useState(false);
   const [guestTablesLoading, setGuestTablesLoading] = useState(true);
   const [guestImporting, setGuestImporting] = useState(false);
+  const [guestResetting, setGuestResetting] = useState(false);
   const [guestImportMessage, setGuestImportMessage] = useState("");
   const [guestImportError, setGuestImportError] = useState("");
   const [guestSearch, setGuestSearch] = useState("");
@@ -128,6 +129,28 @@ export function App() {
       setGuestImportError(error instanceof Error ? error.message : "CSV yüklenemedi.");
     } finally {
       setGuestImporting(false);
+    }
+  };
+
+  const resetGuests = async () => {
+    if (!window.confirm("Tüm davetliler ve kayıtlı notları kalıcı olarak silinecek. Devam edilsin mi?")) return;
+    setGuestResetting(true);
+    setGuestImportMessage("");
+    setGuestImportError("");
+    try {
+      const response = await fetch("/api/guests", { method: "DELETE" });
+      const result = await response.json() as { deleted?: number; error?: string };
+      if (!response.ok) throw new Error(result.error ?? "Davetli listesi sıfırlanamadı.");
+      setGuestTables([]);
+      setGuestSearch("");
+      setEditingGuestKey(null);
+      const deleted = result.deleted ?? 0;
+      setGuestImportMessage(`${deleted} davetli silindi.`);
+      log(`Davetli listesi sıfırlandı; ${deleted} kayıt silindi.`);
+    } catch (error) {
+      setGuestImportError(error instanceof Error ? error.message : "Davetli listesi sıfırlanamadı.");
+    } finally {
+      setGuestResetting(false);
     }
   };
 
@@ -430,19 +453,28 @@ export function App() {
       <aside className="panel guest-panel">
         <h2>Davetli listesi</h2>
         <div className="guest-import">
-          <label className={`guest-import-button${guestImporting ? " disabled" : ""}`}>
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              disabled={guestImporting}
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void uploadGuestCsv(file);
-                event.target.value = "";
-              }}
-            />
-            {guestImporting ? "CSV yükleniyor…" : "CSV yükle"}
-          </label>
+          <div className="guest-import-actions">
+            <label className={`guest-import-button${guestImporting || guestResetting ? " disabled" : ""}`}>
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                disabled={guestImporting || guestResetting}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void uploadGuestCsv(file);
+                  event.target.value = "";
+                }}
+              />
+              {guestImporting ? "CSV yükleniyor…" : "CSV yükle"}
+            </label>
+            <button
+              className="secondary guest-reset-button"
+              disabled={guestTables.length === 0 || guestImporting || guestResetting}
+              onClick={() => void resetGuests()}
+            >
+              {guestResetting ? "Sıfırlanıyor…" : "Sıfırla"}
+            </button>
+          </div>
           <small>Mevcut davetliler güncellenir; listede olmayanlar silinmez.</small>
           {guestImportMessage && <p className="import-message">{guestImportMessage}</p>}
           {guestImportError && <p className="context-error">{guestImportError}</p>}

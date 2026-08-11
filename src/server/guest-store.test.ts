@@ -63,3 +63,13 @@ test("finds guests through aliases", () => {
     assert.equal(result.best?.guest.fullName, "Ayşe Yılmaz");
   });
 });
+
+test("deletes every guest and their contexts", () => {
+  withStore((store) => {
+    store.importCsv("fullName,tableNumber,aliases\nAyşe Yılmaz,3,\nMehmet Kaya,4,\n");
+    store.setContext("Ayşe Yılmaz", "3", "Gelinin arkadaşı");
+    assert.equal(store.deleteAll(), 2);
+    assert.deepEqual(store.list(), []);
+    assert.equal(store.deleteAll(), 0);
+  });
+});

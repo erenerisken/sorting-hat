@@ -40,6 +40,10 @@ app.post("/api/guests/import", (req, res) => {
   }
 });
 
+app.delete("/api/guests", (_req, res) => {
+  res.json({ ok: true, deleted: guestStore.deleteAll() });
+});
+
 app.put("/api/guest-context", (req, res) => {
   const fullName = typeof req.body?.fullName === "string" ? req.body.fullName.trim() : "";
   const tableNumber = typeof req.body?.tableNumber === "string" ? req.body.tableNumber.trim() : "";

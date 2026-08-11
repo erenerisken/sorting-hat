@@ -135,6 +135,10 @@ export class GuestStore {
     return this.get(fullName, tableNumber);
   }
 
+  deleteAll(): number {
+    return this.database.prepare("DELETE FROM guests").run().changes;
+  }
+
   importCsv(content: string): ImportResult {
     let records: Array<Record<string, string>>;
     try {
